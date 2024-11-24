@@ -10,26 +10,22 @@ const io = new Server(httpServer, {
   },
 });
 
-// Store user data with additional information
 let users = {};
-
-// Handle all socket connections
 io.on("connection", (socket) => {
   console.log(`User connected: ${socket.id}`);
-
-  // Handle user registration
   socket.on("register", (userData) => {
     console.log(`User registered: ${socket.id}`, userData);
 
     users[socket.id] = {
       id: socket.id,
+      image:userData.image,
       name: userData.name,
       position: userData.position || { x: 0, y: 0 },
       status: "online",
       lastActive: Date.now(),
     };
-
-    // Broadcast updated users list to all clients
+    console.log("sent to all users",users);
+    
     io.emit("users", users);
   });
 
