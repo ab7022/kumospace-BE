@@ -11,8 +11,9 @@ const io = new Server(httpServer, {
 });
 
 let users = {}; // Tracks connected users
-let groups = {}; // Tracks groups and their members
 
+const emailToSocketIdMap = new Map();
+const socketidToEmailMap = new Map();
 io.on("connection", (socket) => {
   console.log(`User connected: ${socket.id}`);
 
@@ -45,40 +46,35 @@ io.on("connection", (socket) => {
     }
   });
 
-  // Private messaging
-  socket.on("privateMessage", ({ to, message }) => {
-    if (users[to]) {
-      io.to(to).emit("privateMessage", {
-        from: socket.id,
-        name: users[socket.id]?.name,
-        message,
-      });
-    }
+ 
+
+  socket.on("room:join", (data) => {
+    const { email, room } = data;
+    emailToSocketIdMap.set(email, socket.id);
+    socketidToEmailMap.set(socket.id, email);
+    io.to(room).emit("user:joined", { email, id: socket.id });
+    console.log(`User ${email} joined room ${room}`);
+    
+    socket.join(room);
+    io.to(socket.id).emit("room:join", data);
   });
 
-  // Group messaging
-  socket.on("createGroup", ({ groupName, members }) => {
-    groups[groupName] = members;
-    members.forEach((memberId) => {
-      if (users[memberId]) {
-        io.to(memberId).emit("groupCreated", { groupName, members });
-      }
-    });
+  socket.on("user:call", ({ to, offer }) => {
+    io.to(to).emit("incomming:call", { from: socket.id, offer });
   });
 
-  socket.on("groupMessage", ({ groupName, message }) => {
-    if (groups[groupName]) {
-      groups[groupName].forEach((memberId) => {
-        if (users[memberId]) {
-          io.to(memberId).emit("groupMessage", {
-            groupName,
-            from: socket.id,
-            name: users[socket.id]?.name,
-            message,
-          });
-        }
-      });
-    }
+  socket.on("call:accepted", ({ to, ans }) => {
+    io.to(to).emit("call:accepted", { from: socket.id, ans });
+  });
+
+  socket.on("peer:nego:needed", ({ to, offer }) => {
+    console.log("peer:nego:needed", offer);
+    io.to(to).emit("peer:nego:needed", { from: socket.id, offer });
+  });
+
+  socket.on("peer:nego:done", ({ to, ans }) => {
+    console.log("peer:nego:done", ans);
+    io.to(to).emit("peer:nego:final", { from: socket.id, ans });
   });
 
   // Disconnection
