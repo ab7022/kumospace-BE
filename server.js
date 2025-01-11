@@ -45,7 +45,9 @@ io.on("connection", (socket) => {
       io.emit("users", users); // Broadcast updated user list
     }
   });
-
+  socket.on('call:end', ({ to }) => {
+    io.to(to).emit('call:ended');
+  });
  
 
   socket.on("room:join", (data) => {
@@ -75,6 +77,10 @@ io.on("connection", (socket) => {
   socket.on("peer:nego:done", ({ to, ans }) => {
     console.log("peer:nego:done", ans);
     io.to(to).emit("peer:nego:final", { from: socket.id, ans });
+  });
+
+  socket.on("user:screenShare", ({ to, offer }) => {
+    io.to(to).emit("incomming:screenShare", { from: socket.id, offer });
   });
 
   // Disconnection
