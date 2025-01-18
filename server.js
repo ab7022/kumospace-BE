@@ -91,7 +91,24 @@ io.on("connection", (socket) => {
     }
     console.log(`User disconnected: ${socket.id}`);
   });
-
+  socket.on("joinRoom", (user) => {
+    const spaceCode = user.spaceCode;
+    socket.join(spaceCode);
+    console.log(`User joined room: ${spaceCode}`);
+  });
+  socket.on("group-message", (message) => {
+    const date = new Date();
+    const messageObject = {
+      senderEmail: message.senderEmail,
+      name : message.name,
+      timestamp: date,
+      image: message.image,
+      text: message.text,
+      name: message.name,
+      code: message.code,
+    };
+    io.to(messageObject.code).emit("receive-group-message", messageObject);
+  });
   // Register user on connection
   socket.on("registerForMessage", (user) => {
   // Remove old users with the same email
@@ -121,6 +138,7 @@ io.on("connection", (socket) => {
 
     // Send previous relevant messages to the newly connected user
     socket.emit("previousMessages", relevantMessages);
+    
   });
 
   // Listen for sending messages
@@ -128,13 +146,14 @@ io.on("connection", (socket) => {
     const { email, text } = message;
     //email:recipient email
     // Store message in memory
+    const date = new Date();
     const messageObject = {
       senderEmail: users2[socket.id].email, 
       image: users2[socket.id].image,
       name: users2[socket.id].name,
       recipientEmail: email, 
       text,
-      timestamp: Date.now(),
+      timestamp: date,
     };
 
     messages.push(messageObject);
@@ -142,14 +161,8 @@ io.on("connection", (socket) => {
 
     // Find the recipient's socket ID based on their email
     const recipientSocketId = Object.keys(users2).find((key) => {
-      console.log("users2[key].email", users2[key].email);
       return users2[key].email === email; // Explicitly return the comparison result
     });
-    
-    console.log("users2:", users2);
-    console.log("Searching for recipient email:", email);
-    console.log("Recipient socket ID:", recipientSocketId);
-    
     // If recipient is found, send the message to them
     if (recipientSocketId) {
       io.to(recipientSocketId).emit("receiveMessage", messageObject);
@@ -159,15 +172,18 @@ io.on("connection", (socket) => {
     socket.emit("receiveMessage", messageObject);
 
     // Cleanup old messages
-    setTimeout(cleanupMessages, 5 * 60 * 1000);
+    setTimeout(cleanupMessages, 20 * 60 * 1000);
   });
 });
 function cleanupMessages() {
   const currentTime = Date.now();
-  messages = messages.filter(
-    (message) => currentTime - message.timestamp < 30 * 60 * 1000
-  );
+  messages = messages.filter((message) => {
+    // Extract the numeric timestamp from the Date object
+    const messageTime = new Date(message.timestamp).getTime();
+    return currentTime - messageTime < 30 * 60 * 1000; // 30 minutes filter
+  });
 }
+
 // Clean up inactive users periodically
 setInterval(() => {
   const now = Date.now();
