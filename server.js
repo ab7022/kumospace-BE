@@ -13,7 +13,7 @@ const io = new Server(httpServer, {
 let users = {}; // Tracks connected users
 let messages = []; // Store messages in memory for cleanup logic
 let users2 = {}; // Store users with socket ID as the key
-
+let groupMessages = []; // Store group messages
 const emailToSocketIdMap = new Map();
 const socketidToEmailMap = new Map();
 io.on("connection", (socket) => {
@@ -95,6 +95,16 @@ io.on("connection", (socket) => {
     const spaceCode = user.spaceCode;
     socket.join(spaceCode);
     console.log(`User joined room: ${spaceCode}`);
+    const relevantMessages = groupMessages.filter((message) => {
+      const currentTime = Date.now();
+      return (
+        (message.code === user.spaceCode) &&
+        currentTime - message.timestamp <= 30 * 60 * 1000 // 30 minutes filter
+      );
+    });
+
+    // Send previous relevant messages to the newly connected user
+    socket.emit("previousMessagesForGroup", relevantMessages);
   });
   socket.on("group-message", (message) => {
     const date = new Date();
@@ -107,6 +117,8 @@ io.on("connection", (socket) => {
       name: message.name,
       code: message.code,
     };
+    groupMessages.push(messageObject);
+
     io.to(messageObject.code).emit("receive-group-message", messageObject);
   });
   // Register user on connection
@@ -144,8 +156,7 @@ io.on("connection", (socket) => {
   // Listen for sending messages
   socket.on("sendMessage", (message) => {
     const { email, text } = message;
-    //email:recipient email
-    // Store message in memory
+  
     const date = new Date();
     const messageObject = {
       senderEmail: users2[socket.id].email, 
@@ -173,11 +184,21 @@ io.on("connection", (socket) => {
 
     // Cleanup old messages
     setTimeout(cleanupMessages, 20 * 60 * 1000);
+    setTimeout(cleanupMessagesForGroup, 20 * 60 * 1000);
   });
 });
 function cleanupMessages() {
   const currentTime = Date.now();
   messages = messages.filter((message) => {
+    // Extract the numeric timestamp from the Date object
+    const messageTime = new Date(message.timestamp).getTime();
+    return currentTime - messageTime < 30 * 60 * 1000; // 30 minutes filter
+  });
+}
+
+function cleanupMessagesForGroup() {
+  const currentTime = Date.now();
+  messages = groupMessages.filter((message) => {
     // Extract the numeric timestamp from the Date object
     const messageTime = new Date(message.timestamp).getTime();
     return currentTime - messageTime < 30 * 60 * 1000; // 30 minutes filter
